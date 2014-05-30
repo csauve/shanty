@@ -1,0 +1,19 @@
+{
+  "name": "shanty",
+  "version": "0.0.0",
+  "description": "A service to retrieve online media as mp3 files",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": "",
+  "author": "csauve",
+  "license": "BSD",
+  "dependencies": {
+    "config": "~0.4.36",
+    "nedb": "~0.10.5",
+    "express": "~4.3.2",
+    "socket.io": "~1.0.2"
+  },
+  "devDependencies": {}
+}
