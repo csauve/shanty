@@ -20,8 +20,11 @@ socket.on("connection", function(client) {
         downloaderService.getDownloads(client.sessionId, function(error, downloads) {
             if (error) return console.error(error);
             client.emit("welcome", {downloads: downloads, sessionId: client.sessionId});
-            downloads.forEach(function(download) {
-                subscribeToDownloaderIfExists(client, download._id);
+            
+            downloaderService.on("download-updated", function(download) {
+                if (download.sessionId == client.sessionId) {
+                    client.emit("download-updated", download);
+                }
             });
         });
     });
@@ -30,28 +33,8 @@ socket.on("connection", function(client) {
         downloaderService.enqueue(client.sessionId, url, function(error, download) {
             if (error) return console.error(error);
             client.emit("download-updated", download);
-            subscribeToDownloaderIfExists(client, download._id);
         });
     });
 });
 
-function subscribeToDownloaderIfExists(client, downloadId) {
-    var downloader = downloaderService.getDownloader(downloadId);
-    if (!downloader) return;
-
-    downloader.on("downloading", function(download) {
-        client.emit("download-updated", download);
-    });
-
-    downloader.on("downloaded", function(download) {
-        client.emit("download-updated", download);
-    });
-
-    downloader.on("done", function(download) {
-        client.emit("download-updated", download);
-    });
-
-    downloader.on("failure", function(download) {
-        client.emit("download-updated", download);
-    });
-}
+downloaderService.resumeDownloads();
