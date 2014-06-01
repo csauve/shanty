@@ -52,10 +52,10 @@ function DownloaderService() {
             if (error) return emitFailure(download, error);
 
             var match = info.title.match(new RegExp("(.+) - (.+(?: \\(.+\\))?)", "i"));
-            download.metadata = {
+            download.metadata = match ? {
                 artist: match[1],
                 title: match[2]
-            }
+            } : {};
             
             var flvPath = path.join(config.downloadsDir, download._id + ".flv.tmp");
             var flvFile = fs.createWriteStream(flvPath);
