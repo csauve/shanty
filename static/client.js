@@ -10,41 +10,42 @@ function MainCtrl($scope) {
     });
 
     socket.on("disconnect", function() {
-        $scope.$apply(function() {
-            $scope.connected = false;
-        });
+        $scope.$apply(function() { $scope.connected = false; });
     });
 
     socket.on("welcome", function(data) {
         $.cookie("sessionId", data.sessionId, {expires: 7});
-        $scope.$apply(function() {
-            $scope.downloads = data.downloads || [];
-        });
+        $scope.$apply(function() { $scope.downloads = data.downloads || []; });
     });
 
-    $scope.startDownload = function() {
+    $scope.queueDownload = function() {
         if ($scope.formUrl) {
             socket.emit("queue-download", $scope.formUrl);
             $scope.formUrl = "";
         }
     };
 
+    var timeout;
+    $scope.metadataChanged = function(download) {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(function() {
+            socket.emit("apply-metadata", download);
+        }, 400);
+    };
+
     socket.on("download-updated", function(download) {
         $scope.$apply(function() {
             for (var i = 0; i < $scope.downloads.length; i++) {
                 if ($scope.downloads[i]._id == download._id) {
-                    $scope.downloads[i] = download;
+                    //update properties rather than replacing object to keep inputs in focus
+                    for (key in download) {
+                        var value = download[key];
+                        $scope.downloads[i][key] = value;
+                    }
                     return;
                 }
             }
             $scope.downloads.push(download);
         });
     });
-
-    socket.on("error", function(error) {
-        $scope.$apply(function() {
-            $scope.error = error.message;
-        });
-    });
-
 }

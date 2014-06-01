@@ -6,7 +6,6 @@ var path = require("path");
 var fs = require("fs");
 var ytdl = require("ytdl");
 var mkdirp = require("mkdirp");
-var sanitize = require("sanitize-filename");
 var FFmpeg = require("fluent-ffmpeg");
 var taglib = require("taglib");
 
@@ -19,6 +18,24 @@ var downloads = new Datastore({
 function DownloaderService() {
     events.EventEmitter.call(this);
     var self = this;
+
+    function emitUpdated(download, status, callback) {
+        download.status = status;
+        self.emit("download-updated", download);
+        if (callback) downloads.update({_id: download._id}, download, {}, function(err, numReplaced) {
+            callback(err);
+        });
+    }
+
+    function emitFailure(download, error) {
+        if (error) console.error(error);
+        //todo: remove files too
+        downloads.remove({_id: download._id}, {}, function(err, numRemoved) {
+            if (err) console.error(err);
+            download.status = "Failed";
+            self.emit("download-updated", download);
+        });
+    }
 
     function downloadMedia(download) {
         mkdirp(config.downloadsDir, function(error) {
@@ -64,39 +81,37 @@ function DownloaderService() {
         .saveToFile(dstPath, function(retcode, stderr) {
             //retcode and stderr useless?
             fs.unlinkSync(flvPath);
-            emitUpdated(download, "Ready", function(error) {
-                if (error) emitFailure(download, error);
+            emitUpdated(download, "Untagged", function(error) {
+                if (error) return emitFailure(download, error);
+                applyMetadata(download);
             });
         });
     }
 
-    // function saveTags() {
-    //     console.log("writing metadata");
-    //     var tag = taglib.tagSync(dstPath);
-    //     tag.artist = artist;
-    //     tag.title = title;
-    //     if (argv.album) tag.album = argv.album;
-    //     if (argv.genre) tag.genre = argv.genre;
-    //     if (argv.year) tag.year = argv.year;
-    //     tag.saveSync();
-    // }
+    function applyMetadata(applyDownload) {
+        downloads.findOne({_id: applyDownload._id}, function(err, download) {
+            if (err) return emitFailure(download, error);
+            if (!download) return emitFailure(download, "Download does not exist");
 
-    function emitUpdated(download, status, callback) {
-        download.status = status;
-        self.emit("download-updated", download);
-        if (callback) downloads.update({_id: download._id}, download, {}, function(err, numReplaced) {
-            callback(err);
+            var mp3Path = path.join(config.downloadsDir, download._id + ".mp3");
+            console.log("Applying metadata to " + mp3Path);
+            //emitUpdated(download, "Applying Metadata");
+
+            var tag = taglib.tagSync(mp3Path);
+            for (key in applyDownload.metadata) {
+                var value = applyDownload.metadata[key];
+                if (value) tag[key] = value;
+            }
+            tag.saveSync();
+
+            download.metadata = applyDownload.metadata;
+            emitUpdated(download, "Ready", function(error) {
+                if (error) return emitFailure(download, error);
+            });
         });
     }
 
-    function emitFailure(download, error) {
-        if (error) console.error(error);
-        downloads.remove({_id: download._id}, {}, function(err, numRemoved) {
-            if (err) console.error(err);
-            download.status = "Failed";
-            self.emit("download-updated", download);
-        });
-    }
+    self.applyMetadata = applyMetadata;
 
     self.resumeDownloads = function() {
         downloads.find({status: {$ne: "Ready"}}, function(err, downloads) {
@@ -104,13 +119,14 @@ function DownloaderService() {
             downloads.forEach(function(download) {
                 if (download.status == "Queued") downloadMedia(download);
                 else if (download.status == "Downloaded") convertMedia(download);
+                else if (download.status == "Untagged") applyMetadata(download);
             });
         });
-    }
+    };
 
     self.getDownloads = function(sessionId, callback) {
         downloads.find({sessionId: sessionId}, callback);
-    }
+    };
 
     self.enqueue = function(sessionId, url, callback) {
         downloads.insert({
@@ -124,7 +140,14 @@ function DownloaderService() {
             }
             callback(error, download);
         });
-    }
+    };
+
+    self.getMp3 = function(downloadId, callback) {
+        downloads.findOne({_id: downloadId}, function(error, download) {
+            var mp3Path = path.join(config.downloadsDir, downloadId + ".mp3");
+            callback(error, download, mp3Path);
+        });
+    };
 };
 
 util.inherits(DownloaderService, events.EventEmitter);

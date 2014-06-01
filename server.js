@@ -2,7 +2,10 @@ var config = require("config");
 var Datastore = require("nedb");
 var express = require("express");
 var io = require("socket.io");
+var mime = require("mime");
 var downloaderService = require("./downloaderService");
+var sanitize = require("sanitize-filename");
+var fs = require("fs");
 
 var app = express();
 app.use(express.static("static"));
@@ -34,6 +37,20 @@ socket.on("connection", function(client) {
             if (error) return console.error(error);
             client.emit("download-updated", download);
         });
+    });
+
+    client.on("apply-metadata", function(download) {
+        downloaderService.applyMetadata(download);
+    });
+});
+
+app.get("/download/:id", function(req, res) {
+    downloaderService.getMp3(req.params.id, function(error, download, mp3Path) {
+        if (error) return res.send(500);
+        var filename = sanitize(download.metadata.artist + " - " + download.metadata.title + ".mp3");
+        res.setHeader("Content-disposition", "attachment; filename=" + filename);
+        res.setHeader("Content-type", mime.lookup(mp3Path));
+        fs.createReadStream(mp3Path).pipe(res);
     });
 });
 
