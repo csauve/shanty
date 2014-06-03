@@ -19,7 +19,8 @@
     "sanitize-filename": "~1.0.1",
     "fluent-ffmpeg": "~1.7.1",
     "taglib": "~0.8.0",
-    "mime": "~1.2.11"
+    "mime": "~1.2.11",
+    "moment": "~2.6.0"
   },
   "devDependencies": {}
 }

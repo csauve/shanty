@@ -23,11 +23,17 @@ socket.on("connection", function(client) {
         downloaderService.getDownloads(client.sessionId, function(error, downloads) {
             if (error) return console.error(error);
             client.emit("welcome", {downloads: downloads, sessionId: client.sessionId});
-            
-            downloaderService.on("download-updated", function(download) {
+
+            var downloadUpdatedHandler = function(download) {
                 if (download.sessionId == client.sessionId) {
                     client.emit("download-updated", download);
                 }
+            }
+
+            downloaderService.on("download-updated", downloadUpdatedHandler);
+
+            client.on("disconnect", function() {
+                downloaderService.removeListener("download-updated", downloadUpdatedHandler);
             });
         });
     });

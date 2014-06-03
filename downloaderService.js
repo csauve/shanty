@@ -8,12 +8,48 @@ var ytdl = require("ytdl");
 var mkdirp = require("mkdirp");
 var FFmpeg = require("fluent-ffmpeg");
 var taglib = require("taglib");
+var moment = require("moment");
 
-//db setup
 var downloads = new Datastore({
     filename: path.join(config.downloadsDir, "downloads.db"),
     autoload: true
 });
+
+function getPath(download, extension) {
+    return path.join(config.downloadsDir, download._id + "." + extension);
+}
+
+//todo: emit cleared event
+
+function clearDownload(download) {
+    downloads.remove({_id: download._id}, {}, function(error, numRemoved) {
+        if (error) console.error("Failed to clear " + download._id + " from datastore");
+    });
+    var mp3Path = getPath(download, "mp3");
+    var flvPath = getPath(download, "flv");
+    fs.exists(mp3Path, function(exists) {
+        if (exists) fs.unlink(mp3Path, function(error) {
+            if (error) console.error("Failed to clear " + mp3Path);
+        });
+    });
+    fs.exists(flvPath, function(exists) {
+        if (exists) fs.unlink(flvPath, function(error) {
+            if (error) console.error("Failed to clear " + flvPath);
+        });
+    });
+}
+
+(function hourly() {
+    var cutoff = moment().subtract("hours", config.maxStorageTimeHours);
+    downloads.find({dateQueued: {$lt: cutoff}}, function(error, downloads) {
+        if (error) return console.error(error);
+        if (downloads.length > 0) console.log("Clearing " + downloads.length + " downloads");
+        downloads.forEach(function(download) {
+            clearDownload(download);
+        });
+    });
+    setTimeout(hourly, 60 * 60 * 1000);
+})();
 
 function DownloaderService() {
     events.EventEmitter.call(this);
@@ -57,7 +93,7 @@ function DownloaderService() {
                 title: match[2]
             } : {};
             
-            var flvPath = path.join(config.downloadsDir, download._id + ".flv.tmp");
+            var flvPath = getPath(download, "flv");
             var flvFile = fs.createWriteStream(flvPath);
             ytdl(download.url).pipe(flvFile);
 
@@ -73,7 +109,7 @@ function DownloaderService() {
     function convertMedia(download, flvPath) {
         console.log("Converting FLV to MP3: " + flvPath);
         emitUpdated(download, "Converting");
-        var dstPath = path.join(config.downloadsDir, download._id + ".mp3");
+        var dstPath = getPath(download, "mp3");
 
         new FFmpeg({source: flvPath, nolog: true})
         .withAudioCodec("libmp3lame")
@@ -93,7 +129,7 @@ function DownloaderService() {
             if (err) return emitFailure(download, error);
             if (!download) return emitFailure(download, "Download does not exist");
 
-            var mp3Path = path.join(config.downloadsDir, download._id + ".mp3");
+            var mp3Path = getPath(download, "mp3");
             console.log("Applying metadata to " + mp3Path);
             //emitUpdated(download, "Applying Metadata");
 
@@ -144,11 +180,13 @@ function DownloaderService() {
 
     self.getMp3 = function(downloadId, callback) {
         downloads.findOne({_id: downloadId}, function(error, download) {
-            var mp3Path = path.join(config.downloadsDir, downloadId + ".mp3");
+            var mp3Path = getPath(download, "mp3");
             callback(error, download, mp3Path);
         });
     };
 };
 
 util.inherits(DownloaderService, events.EventEmitter);
-module.exports = new DownloaderService();
+var service = new DownloaderService();
+service.setMaxListeners(0);
+module.exports = service;
