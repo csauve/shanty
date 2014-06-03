@@ -19,38 +19,6 @@ function getPath(download, extension) {
     return path.join(config.downloadsDir, download._id + "." + extension);
 }
 
-//todo: emit cleared event
-
-function clearDownload(download) {
-    downloads.remove({_id: download._id}, {}, function(error, numRemoved) {
-        if (error) console.error("Failed to clear " + download._id + " from datastore");
-    });
-    var mp3Path = getPath(download, "mp3");
-    var flvPath = getPath(download, "flv");
-    fs.exists(mp3Path, function(exists) {
-        if (exists) fs.unlink(mp3Path, function(error) {
-            if (error) console.error("Failed to clear " + mp3Path);
-        });
-    });
-    fs.exists(flvPath, function(exists) {
-        if (exists) fs.unlink(flvPath, function(error) {
-            if (error) console.error("Failed to clear " + flvPath);
-        });
-    });
-}
-
-(function hourly() {
-    var cutoff = moment().subtract("hours", config.maxStorageTimeHours);
-    downloads.find({dateQueued: {$lt: cutoff}}, function(error, downloads) {
-        if (error) return console.error(error);
-        if (downloads.length > 0) console.log("Clearing " + downloads.length + " downloads");
-        downloads.forEach(function(download) {
-            clearDownload(download);
-        });
-    });
-    setTimeout(hourly, 60 * 60 * 1000);
-})();
-
 function DownloaderService() {
     events.EventEmitter.call(this);
     var self = this;
@@ -72,6 +40,37 @@ function DownloaderService() {
             self.emit("download-updated", download);
         });
     }
+
+    function expireDownload(download) {
+        downloads.remove({_id: download._id}, {}, function(error, numRemoved) {
+            if (error) console.error("Failed to expire " + download._id + " from datastore");
+            else emitUpdated(download, "Expired");
+        });
+        var mp3Path = getPath(download, "mp3");
+        var flvPath = getPath(download, "flv");
+        fs.exists(mp3Path, function(exists) {
+            if (exists) fs.unlink(mp3Path, function(error) {
+                if (error) console.error("Failed to remove " + mp3Path);
+            });
+        });
+        fs.exists(flvPath, function(exists) {
+            if (exists) fs.unlink(flvPath, function(error) {
+                if (error) console.error("Failed to remove " + flvPath);
+            });
+        });
+    }
+
+    (function hourly() {
+        var cutoff = moment().subtract("hours", config.maxStorageTimeHours);
+        downloads.find({dateQueued: {$lt: cutoff}, status: "Ready"}, function(error, downloads) {
+            if (error) return console.error(error);
+            if (downloads.length > 0) console.log("Expiring " + downloads.length + " downloads");
+            downloads.forEach(function(download) {
+                expireDownload(download);
+            });
+        });
+        setTimeout(hourly, 60 * 60 * 1000);
+    })();
 
     function downloadMedia(download) {
         mkdirp(config.downloadsDir, function(error) {
