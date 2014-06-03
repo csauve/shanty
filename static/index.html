@@ -25,10 +25,10 @@
       <h3 ng-if="download.status != 'Ready'">{{download.url}} ({{download.status}})</h3>
       <div class="mp3-metadata" ng-if="download.metadata">
         <h4>Metadata</h4>
-        <label>Artist</label>
-        <input type="text" ng-model="download.metadata.artist" ng-change="metadataChanged(download)"></input>
-        <label>Title</label>
-        <input type="text" ng-model="download.metadata.title" ng-change="metadataChanged(download)"></input>
+        <div ng-repeat="(key, value) in download.metadata">
+          <label>{{key}}</label>
+          <input type="text" ng-model="download.metadata[key]" ng-change="metadataChanged(download)"></input>
+        </div>
       </div>
     </div>
   </body>
