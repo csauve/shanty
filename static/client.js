@@ -1,16 +1,15 @@
 function MainCtrl($scope) {
-    $scope.connected = false;
     var socket = io.connect();
 
     socket.on("connect", function() {
         $scope.$apply(function() {
-            $scope.connected = true;
+            $scope.disconnected = false;
             socket.emit("ready", $.cookie("sessionId"));
         });
     });
 
     socket.on("disconnect", function() {
-        $scope.$apply(function() { $scope.connected = false; });
+        $scope.$apply(function() { $scope.disconnected = true; });
     });
 
     socket.on("welcome", function(data) {
@@ -19,6 +18,7 @@ function MainCtrl($scope) {
     });
 
     $scope.queueDownload = function() {
+        console.dir($scope);
         if ($scope.formUrl) {
             socket.emit("queue-download", $scope.formUrl);
             $scope.formUrl = "";
@@ -33,6 +33,28 @@ function MainCtrl($scope) {
         }, 400);
     };
 
+    $scope.removeMetadata = function(download, key) {
+        delete download.metadata[key];
+        $scope.metadataChanged(download);
+    };
+
+    $scope.getDownloadUrl = function(download) { return "/download/" + download._id; };
+
+    $scope.availableMetadataKeys = function(download) {
+        return [
+            "art", "title", "artist", "album", "year", "genre", "track", "comment"
+        ].filter(function(key) {
+            return !download.metadata.hasOwnProperty(key);
+        });
+    };
+
+    $scope.addTmpMetadata = function(download) {
+        download.metadata[download.metadataTmpKey] = download.metadataTmpValue;
+        download.metadataTmpKey = undefined;
+        download.metadataTmpValue = undefined;
+        $scope.metadataChanged(download);
+    };
+
     socket.on("download-updated", function(download) {
         $scope.$apply(function() {
             for (var i = 0; i < $scope.downloads.length; i++) {
@@ -45,7 +67,7 @@ function MainCtrl($scope) {
                     return;
                 }
             }
-            $scope.downloads.push(download);
+            $scope.downloads.unshift(download);
         });
     });
 }

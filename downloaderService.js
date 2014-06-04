@@ -134,8 +134,9 @@ function DownloaderService() {
 
             var tag = taglib.tagSync(mp3Path);
             for (key in applyDownload.metadata) {
+                key = key.toLowerCase();
                 var value = applyDownload.metadata[key];
-                if (value) tag[key] = value;
+                if (value) tag[key] = value.trim();
             }
             tag.saveSync();
 
@@ -160,7 +161,7 @@ function DownloaderService() {
     };
 
     self.getDownloads = function(sessionId, callback) {
-        downloads.find({sessionId: sessionId}, callback);
+        downloads.find({sessionId: sessionId}).sort({dateQueued: -1}).exec(callback);
     };
 
     self.enqueue = function(sessionId, url, callback) {
@@ -179,7 +180,7 @@ function DownloaderService() {
 
     self.getMp3 = function(downloadId, callback) {
         downloads.findOne({_id: downloadId}, function(error, download) {
-            var mp3Path = getPath(download, "mp3");
+            var mp3Path = (error || !download) ? undefined : getPath(download, "mp3");
             callback(error, download, mp3Path);
         });
     };

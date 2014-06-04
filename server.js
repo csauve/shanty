@@ -31,7 +31,6 @@ socket.on("connection", function(client) {
             }
 
             downloaderService.on("download-updated", downloadUpdatedHandler);
-
             client.on("disconnect", function() {
                 downloaderService.removeListener("download-updated", downloadUpdatedHandler);
             });
@@ -53,6 +52,7 @@ socket.on("connection", function(client) {
 app.get("/download/:id", function(req, res) {
     downloaderService.getMp3(req.params.id, function(error, download, mp3Path) {
         if (error) return res.send(500);
+        if (!download || !mp3Path) return res.send(404);
         var filename = sanitize(download.metadata.artist + " - " + download.metadata.title + ".mp3");
         res.setHeader("Content-disposition", "attachment; filename=" + filename);
         res.setHeader("Content-type", mime.lookup(mp3Path));
