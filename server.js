@@ -9,6 +9,7 @@ var fs = require("fs");
 
 var app = express();
 app.use(express.static("static"));
+if (config.trustProxy) app.enable("trust proxy");
 var server = require("http").Server(app);
 var socket = io(server);
 

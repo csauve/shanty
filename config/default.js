@@ -1,5 +1,6 @@
 module.exports = {
     port: 9000,
     downloadsDir: "downloads",
-    maxStorageTimeHours: 24
+    maxStorageTimeHours: 24,
+    trustProxy: false
 };
