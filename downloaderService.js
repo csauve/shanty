@@ -33,7 +33,7 @@ function DownloaderService() {
 
     function emitFailure(download, error) {
         if (error) console.error(error);
-        //todo: remove files too
+        clearDownloadFiles(download);
         downloads.remove({_id: download._id}, {}, function(err, numRemoved) {
             if (err) console.error(err);
             download.status = "Failed";
@@ -41,11 +41,7 @@ function DownloaderService() {
         });
     }
 
-    function expireDownload(download) {
-        downloads.remove({_id: download._id}, {}, function(error, numRemoved) {
-            if (error) console.error("Failed to expire " + download._id + " from datastore");
-            else emitUpdated(download, "Expired");
-        });
+    function clearDownloadFiles(download) {
         var mp3Path = getPath(download, "mp3");
         var flvPath = getPath(download, "flv");
         fs.exists(mp3Path, function(exists) {
@@ -58,6 +54,14 @@ function DownloaderService() {
                 if (error) console.error("Failed to remove " + flvPath);
             });
         });
+    }
+
+    function expireDownload(download) {
+        downloads.remove({_id: download._id}, {}, function(error, numRemoved) {
+            if (error) console.error("Failed to expire " + download._id + " from datastore");
+            else emitUpdated(download, "Expired");
+        });
+        clearDownloadFiles(download);
     }
 
     (function hourly() {
