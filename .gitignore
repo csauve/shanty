@@ -3,3 +3,4 @@ npm-debug.log
 downloads
 config/runtime.json
 notes.txt
+*.log
