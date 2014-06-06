@@ -1,5 +1,10 @@
+//todo: notifications
+//todo: better titles
 function MainCtrl($scope) {
     var socket = io.connect();
+    var Notification = window.Notification || window.mozNotification || window.webkitNotification;
+    Notification.requestPermission();
+    $scope.notify = true;
 
     socket.on("connect", function() {
         $scope.$apply(function() {
@@ -59,6 +64,11 @@ function MainCtrl($scope) {
         $scope.$apply(function() {
             for (var i = 0; i < $scope.downloads.length; i++) {
                 if ($scope.downloads[i]._id == download._id) {
+                    if ($scope.downloads[i].status != "Ready" && download.status == "Ready" && $scope.notify) {
+                        var options = {body: download.filename};
+                        if (download.metadata.art) options.icon = download.metadata.art;
+                        var notification = new Notification("Download ready", options);
+                    }
                     //update properties rather than replacing object to keep inputs in focus
                     for (key in download) {
                         var value = download[key];

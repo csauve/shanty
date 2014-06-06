@@ -8,7 +8,9 @@ var ytdl = require("ytdl");
 var mkdirp = require("mkdirp");
 var FFmpeg = require("fluent-ffmpeg");
 var taglib = require("taglib");
+var SoundRain = require("soundrain");
 var moment = require("moment");
+var sanitize = require("sanitize-filename");
 
 var downloads = new Datastore({
     filename: path.join(config.downloadsDir, "downloads.db"),
@@ -17,6 +19,14 @@ var downloads = new Datastore({
 
 function getPath(download, extension) {
     return path.join(config.downloadsDir, download._id + "." + extension);
+}
+
+function suggestFilename(download) {
+    if (!download.metadata) return sanitize(download._id + ".mp3");
+    var artist = download.metadata.artist, title = download.metadata.title;
+    if (artist && artist.trim() && title && title.trim())
+        return sanitize(artist.trim() + " - " + title.trim() + ".mp3");
+    return sanitize((download.title || "download") + ".mp3");
 }
 
 function DownloaderService() {
@@ -80,8 +90,29 @@ function DownloaderService() {
         mkdirp(config.downloadsDir, function(error) {
             if (error) return emitFailure(download, error);
             emitUpdated(download, "Downloading");
-            if (download.url.indexOf("youtube.com") != -1) downloadFromYoutube(download);
+            var urlClean = download.url.toLowerCase().trim();
+            if (urlClean.indexOf("youtube.com") != -1) downloadFromYoutube(download);
+            else if (urlClean.indexOf("soundcloud.com") != -1) downloadFromSoundcloud(download);
             else emitFailure(download, "Unsupported media source: " + download.url);
+        });
+    }
+
+    function downloadFromSoundcloud(download) {
+        console.log("Downloading from soundcloud: " + download.url);
+        var song = new SoundRain(download.url, config.downloadsDir);
+        song.on("error", function(err) {
+            emitFailure(download, err);
+        }).on("done", function(file) {
+
+            //todo: get title and guess metadata, art
+
+            download.metadata = {};
+
+            fs.renameSync(file, getPath(download, "mp3"));
+            emitUpdated(download, "Untagged", function(error) {
+                if (error) return emitFailure(download, error);
+                applyMetadata(download);
+            });
         });
     }
 
@@ -90,12 +121,15 @@ function DownloaderService() {
         ytdl.getInfo(download.url, function(error, info) {
             if (error) return emitFailure(download, error);
 
-            var match = info.title.match(new RegExp("(.+) - (.+(?: \\(.+\\))?)", "i"));
+            download.title = info.title;
+            var match = info.title.match(new RegExp("(.+)\\s+-\\s+(.+(?: \\(.+\\))?)", "i"));
             download.metadata = match ? {
                 artist: match[1],
                 title: match[2]
             } : {};
             
+            //todo: guess art
+
             var flvPath = getPath(download, "flv");
             var flvFile = fs.createWriteStream(flvPath);
             ytdl(download.url).pipe(flvFile);
@@ -127,24 +161,28 @@ function DownloaderService() {
         });
     }
 
+    //todo: clear any existing tags
+    //todo: download and apply art
     function applyMetadata(applyDownload) {
         downloads.findOne({_id: applyDownload._id}, function(err, download) {
             if (err) return emitFailure(download, error);
             if (!download) return emitFailure(download, "Download does not exist");
 
+            var newMetadata = applyDownload.metadata;
             var mp3Path = getPath(download, "mp3");
             console.log("Applying metadata to " + mp3Path);
             //emitUpdated(download, "Applying Metadata");
 
             var tag = taglib.tagSync(mp3Path);
-            for (key in applyDownload.metadata) {
+            for (key in newMetadata) {
                 key = key.toLowerCase();
-                var value = applyDownload.metadata[key];
+                var value = newMetadata[key];
                 if (value) tag[key] = value.trim();
             }
             tag.saveSync();
 
-            download.metadata = applyDownload.metadata;
+            download.metadata = newMetadata;
+            download.filename = suggestFilename(download);
             emitUpdated(download, "Ready", function(error) {
                 if (error) return emitFailure(download, error);
             });
@@ -175,17 +213,16 @@ function DownloaderService() {
             url: url,
             dateQueued: new Date()
         }, function(error, download) {
-            if (!error) {
-                downloadMedia(download);
-            }
+            if (!error) downloadMedia(download);
             callback(error, download);
         });
     };
 
     self.getMp3 = function(downloadId, callback) {
         downloads.findOne({_id: downloadId}, function(error, download) {
-            var mp3Path = (error || !download) ? undefined : getPath(download, "mp3");
-            callback(error, download, mp3Path);
+            if (error) return callback(error);
+            if (download.status != "Ready") return callback("Download " + download._id + " is not ready to get")
+            callback(error, download, download ? getPath(download, "mp3") : undefined);
         });
     };
 };
