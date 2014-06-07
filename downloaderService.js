@@ -7,10 +7,12 @@ var fs = require("fs");
 var ytdl = require("ytdl");
 var mkdirp = require("mkdirp");
 var FFmpeg = require("fluent-ffmpeg");
-var taglib = require("taglib");
+var id3 = require("id3-writer");
 var SoundRain = require("soundrain");
 var moment = require("moment");
 var sanitize = require("sanitize-filename");
+var request = require("request");
+var spawn = require("child_process").spawn;
 
 var downloads = new Datastore({
     filename: path.join(config.downloadsDir, "downloads.db"),
@@ -161,30 +163,60 @@ function DownloaderService() {
         });
     }
 
-    //todo: clear any existing tags
-    //todo: download and apply art
+    //todo: download and apply art if changed
+    //todo: lyrics support
     function applyMetadata(applyDownload) {
         downloads.findOne({_id: applyDownload._id}, function(err, download) {
             if (err) return emitFailure(download, error);
             if (!download) return emitFailure(download, "Download does not exist");
+            console.log("Applying metadata to " + download._id);
 
-            var newMetadata = applyDownload.metadata;
-            var mp3Path = getPath(download, "mp3");
-            console.log("Applying metadata to " + mp3Path);
-            //emitUpdated(download, "Applying Metadata");
+            var apply = applyDownload.metadata;
+            var cleanTags = {};
+            ["title", "artist", "album", "year", "genre", "track", "art"].forEach(function(tag) {
+                if (apply[tag] && apply[tag].trim()) cleanTags[tag] = apply[tag].trim();
+            });
 
-            var tag = taglib.tagSync(mp3Path);
-            for (key in newMetadata) {
-                key = key.toLowerCase();
-                var value = newMetadata[key];
-                if (value) tag[key] = value.trim();
-            }
-            tag.saveSync();
-
-            download.metadata = newMetadata;
+            download.metadata = cleanTags;
             download.filename = suggestFilename(download);
-            emitUpdated(download, "Ready", function(error) {
-                if (error) return emitFailure(download, error);
+
+            // //todo: art download, art url persistence
+            // if (tags.art) {
+            //     request.head(tags.art, function(err, res, body) {
+            //         if (err) return console.error(err);
+            //         console.log(res.headers["content-length"]);
+
+            //         request(tags.art).pipe()
+            //     });
+            // }
+
+            //todo: command and run
+            var args = [];
+            var commandArgsMapping = {
+                "title": "-t",
+                "artist": "-a",
+                "album": "-A",
+                "year": "-Y",
+                "genre": "-G",
+                "track": "-n"
+            };
+            for (tagName in commandArgsMapping) {
+                if (cleanTags[tagName]) args.push(commandArgsMapping[tagName], cleanTags[tagName]);
+            }
+
+            //todo: art arg
+
+            var mp3Path = getPath(download, "mp3");
+            args.push(mp3Path);
+
+            var process = spawn(config.eyeD3Command, args);
+            process.on("exit", function(exitCode) {
+                if (exitCode !== 0) {
+                    return emitFailure(download, "EyeD3 returned exit code " + exitCode);
+                }
+                emitUpdated(download, "Ready", function(error) {
+                    if (error) return emitFailure(download, error);
+                });
             });
         });
     }
@@ -221,7 +253,7 @@ function DownloaderService() {
     self.getMp3 = function(downloadId, callback) {
         downloads.findOne({_id: downloadId}, function(error, download) {
             if (error) return callback(error);
-            if (download.status != "Ready") return callback("Download " + download._id + " is not ready to get")
+            if (download.status != "Ready") return callback("Download " + download._id + " is not ready to get");
             callback(error, download, download ? getPath(download, "mp3") : undefined);
         });
     };

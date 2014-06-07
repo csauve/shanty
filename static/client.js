@@ -1,5 +1,3 @@
-//todo: notifications
-//todo: better titles
 function MainCtrl($scope) {
     var socket = io.connect();
     var Notification = window.Notification || window.mozNotification || window.webkitNotification;
@@ -46,9 +44,7 @@ function MainCtrl($scope) {
     $scope.getDownloadUrl = function(download) { return "/download/" + download._id; };
 
     $scope.availableMetadataKeys = function(download) {
-        return [
-            "art", "title", "artist", "album", "year", "genre", "track", "comment"
-        ].filter(function(key) {
+        return ["art", "title", "artist", "album", "year", "genre", "track"].filter(function(key) {
             return !download.metadata.hasOwnProperty(key);
         });
     };
