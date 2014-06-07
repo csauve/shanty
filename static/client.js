@@ -44,7 +44,7 @@ function MainCtrl($scope) {
     $scope.getDownloadUrl = function(download) { return "/download/" + download._id; };
 
     $scope.availableMetadataKeys = function(download) {
-        return ["art", "title", "artist", "album", "year", "genre", "track"].filter(function(key) {
+        return ["title", "artist", "album", "year", "genre", "track", "art"].filter(function(key) {
             return !download.metadata.hasOwnProperty(key);
         });
     };

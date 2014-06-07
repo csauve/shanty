@@ -3,5 +3,6 @@ module.exports = {
     downloadsDir: "downloads",
     maxStorageTimeHours: 24,
     trustProxy: false,
-    eyeD3Command: "eyeD3"
+    eyeD3Command: "eyeD3",
+    maxArtSizeKb: 500
 };

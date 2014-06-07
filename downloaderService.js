@@ -13,6 +13,7 @@ var moment = require("moment");
 var sanitize = require("sanitize-filename");
 var request = require("request");
 var spawn = require("child_process").spawn;
+var resize = require("image-resize-stream");
 
 var downloads = new Datastore({
     filename: path.join(config.downloadsDir, "downloads.db"),
@@ -164,33 +165,23 @@ function DownloaderService() {
     }
 
     //todo: download and apply art if changed
-    //todo: lyrics support
+    //todo: lyrics and comment support
     function applyMetadata(applyDownload) {
         downloads.findOne({_id: applyDownload._id}, function(err, download) {
             if (err) return emitFailure(download, error);
             if (!download) return emitFailure(download, "Download does not exist");
             console.log("Applying metadata to " + download._id);
 
+            //clean up the metadata and set on our download object
             var apply = applyDownload.metadata;
             var cleanTags = {};
             ["title", "artist", "album", "year", "genre", "track", "art"].forEach(function(tag) {
                 if (apply[tag] && apply[tag].trim()) cleanTags[tag] = apply[tag].trim();
             });
-
             download.metadata = cleanTags;
             download.filename = suggestFilename(download);
 
-            // //todo: art download, art url persistence
-            // if (tags.art) {
-            //     request.head(tags.art, function(err, res, body) {
-            //         if (err) return console.error(err);
-            //         console.log(res.headers["content-length"]);
-
-            //         request(tags.art).pipe()
-            //     });
-            // }
-
-            //todo: command and run
+            //build the command to apply the metadata to the MP3 file
             var args = [];
             var commandArgsMapping = {
                 "title": "-t",
@@ -204,20 +195,51 @@ function DownloaderService() {
                 if (cleanTags[tagName]) args.push(commandArgsMapping[tagName], cleanTags[tagName]);
             }
 
-            //todo: art arg
+            //download cover art if given
+            if (cleanTags.art) {
+                request.head(cleanTags.art, function(err, res, body) {
+                    if (err) {
+                        console.error(error);
+                        runEyeD3(args);
+                    } else if (res.statusCode != 200) {
+                        console.error("Image response code " + res.statusCode);
+                        runEyeD3(args);
+                    } else if (res.headers["content-length"] > config.maxArtSizeKb * 1024) {
+                        console.error("Image larger than " + config.maxArtSizeKb + "kb");
+                        runEyeD3(args);
+                    } else {
+                        var artPath = path.join(config.downloadsDir, download._id + ".jpg");
+                        var artFile = fs.createWriteStream(artPath);
+                        request(cleanTags.art).pipe(resize(500, 500, {
+                            crop: true,
+                            format: "jpg",
+                            quality: 100,
+                            smaller: false
+                        })).pipe(artFile);
 
-            var mp3Path = getPath(download, "mp3");
-            args.push(mp3Path);
-
-            var process = spawn(config.eyeD3Command, args);
-            process.on("exit", function(exitCode) {
-                if (exitCode !== 0) {
-                    return emitFailure(download, "EyeD3 returned exit code " + exitCode);
-                }
-                emitUpdated(download, "Ready", function(error) {
-                    if (error) return emitFailure(download, error);
+                        artFile.on("close", function() {
+                            args.push("--add-image=" + artPath + ":FRONT_COVER");
+                            runEyeD3(args);
+                        });
+                    }
                 });
-            });
+            } else {
+                runEyeD3(args);
+            }
+
+            function runEyeD3(args) {
+                var mp3Path = getPath(download, "mp3");
+                args.push(mp3Path);
+
+                //run eyeD3 and notify watchers
+                var process = spawn(config.eyeD3Command, args);
+                process.on("exit", function(exitCode) {
+                    if (exitCode !== 0) return emitFailure(download, "EyeD3 returned exit code " + exitCode);
+                    emitUpdated(download, "Ready", function(error) {
+                        if (error) return emitFailure(download, error);
+                    });
+                });
+            }
         });
     }
 
