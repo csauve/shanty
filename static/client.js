@@ -67,8 +67,8 @@ function MainCtrl($scope) {
                     }
                     //update properties rather than replacing object to keep inputs in focus
                     for (key in download) {
-                        var value = download[key];
-                        $scope.downloads[i][key] = value;
+                        if (key == "metadata" && $scope.downloads[i].metadata) continue;
+                        $scope.downloads[i][key] = download[key];
                     }
                     return;
                 }

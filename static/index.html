@@ -46,10 +46,10 @@
         <div ng-repeat="download in downloads" class="panel panel-default" ng-class="{'panel-danger': download.status == 'Failed'}">
           <div class="panel-heading">
             <div ng-class="{'row': download.metadata.art}">
-              <div class="col-sm-1" ng-if="download.metadata.art">
+              <div class="col-sm-3" ng-if="download.metadata.art">
                 <img class="img-thumbnail" ng-src="{{download.metadata.art}}">
               </div>
-              <div ng-class="{'col-sm-11': download.metadata.art}">
+              <div ng-class="{'col-sm-9': download.metadata.art}">
                 <h3>{{download.title || download.url}}</h3>
                 <h4 ng-if="download.status != 'Ready'">{{download.status}}</h4>
                 <h4 ng-if="download.status == 'Ready'">

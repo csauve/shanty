@@ -173,11 +173,12 @@ function DownloaderService() {
             ["title", "artist", "album", "year", "genre", "track", "art"].forEach(function(tag) {
                 if (apply[tag] && apply[tag].trim()) cleanTags[tag] = apply[tag].trim();
             });
+            if (cleanTags.year && !cleanTags.year.match(new RegExp("\\d{4}"))) delete cleanTags.year;
             download.metadata = cleanTags;
             download.filename = suggestFilename(download);
 
             //build the command to apply the metadata to the MP3 file
-            var args = [];
+            var args = ["--remove-all"];
             var commandArgsMapping = {
                 "title": "-t",
                 "artist": "-a",
