@@ -55,16 +55,12 @@ function DownloaderService() {
     }
 
     function clearDownloadFiles(download) {
-        var mp3Path = getPath(download, "mp3");
-        var flvPath = getPath(download, "flv");
-        fs.exists(mp3Path, function(exists) {
-            if (exists) fs.unlink(mp3Path, function(error) {
-                if (error) console.error("Failed to remove " + mp3Path);
-            });
-        });
-        fs.exists(flvPath, function(exists) {
-            if (exists) fs.unlink(flvPath, function(error) {
-                if (error) console.error("Failed to remove " + flvPath);
+        ["mp3", "flv", "jpg"].forEach(function(resourceType) {
+            var resourcePath = getPath(download, resourceType);
+            fs.exists(resourcePath, function(exists) {
+                if (exists) fs.unlink(resourcePath, function(error) {
+                    if (error) console.error("Failed to remove " + resourcePath);
+                });
             });
         });
     }
@@ -130,9 +126,9 @@ function DownloaderService() {
                 artist: match[1],
                 title: match[2]
             } : {};
-            
-            //todo: guess art
 
+            download.metadata.art = info.iurlmaxres;
+            
             var flvPath = getPath(download, "flv");
             var flvFile = fs.createWriteStream(flvPath);
             ytdl(download.url).pipe(flvFile);
@@ -164,7 +160,6 @@ function DownloaderService() {
         });
     }
 
-    //todo: download and apply art if changed
     //todo: lyrics and comment support
     function applyMetadata(applyDownload) {
         downloads.findOne({_id: applyDownload._id}, function(err, download) {
@@ -208,7 +203,7 @@ function DownloaderService() {
                         console.error("Image larger than " + config.maxArtSizeKb + "kb");
                         runEyeD3(args);
                     } else {
-                        var artPath = path.join(config.downloadsDir, download._id + ".jpg");
+                        var artPath = getPath(download, "jpg");
                         var artFile = fs.createWriteStream(artPath);
                         request(cleanTags.art).pipe(resize(500, 500, {
                             crop: true,
