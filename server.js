@@ -55,7 +55,7 @@ app.get("/download/:id", function(req, res) {
             console.error(error);
             return res.send(500);
         } else if (!download || !mp3Path) return res.send(404);
-        res.setHeader("Content-disposition", "attachment; filename=" + download.filename);
+        res.setHeader("Content-disposition", "attachment; filename=\"" + download.filename + "\"");
         res.setHeader("Content-type", mime.lookup(mp3Path));
         fs.createReadStream(mp3Path).pipe(res);
     });
