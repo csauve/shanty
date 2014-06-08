@@ -7,7 +7,6 @@ var fs = require("fs");
 var ytdl = require("ytdl");
 var mkdirp = require("mkdirp");
 var FFmpeg = require("fluent-ffmpeg");
-var id3 = require("id3-writer");
 var SoundRain = require("soundrain");
 var moment = require("moment");
 var sanitize = require("sanitize-filename");
